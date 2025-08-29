@@ -56,7 +56,7 @@ label import_dialogue:
             except:
                 return default
 
-        def escape_renpy_string(s, quote='"'):
+        def escape_renpy_string(s, quote_char='"'):
             #避免重复转义
             if '\\' in s:
                 # 检查是否已经是正确转义的格式
@@ -70,7 +70,6 @@ label import_dialogue:
         #         s = s.replace('"', '\\"')
         #     else:
         #         s = s.replace("'", "\\'")
-        #     # 换行、标签之类的先留着别动
         #     return s
 
         def replace_first_string_literal(line, new_text):
