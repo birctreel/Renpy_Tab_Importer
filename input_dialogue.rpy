@@ -218,7 +218,7 @@ label import_dialogue:
                         print(f"处理文件 {file_path} 时出错: {str(e)}")
 
 
-                if 0 < idx < len(lines) and voice_re.match(lines[idx - 1]):
+                if 0 < idx < len(lines) and re.match(r'^\s*voice\s+', lines[idx - 1]):
                     lines[idx - 1] = voice_line
                     return lines, idx
                 else:
