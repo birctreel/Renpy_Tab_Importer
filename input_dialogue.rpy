@@ -57,14 +57,21 @@ label import_dialogue:
                 return default
 
         def escape_renpy_string(s, quote='"'):
-            # 简单转义下，
-            s = s.replace('\\', '\\\\')
-            if quote == '"':
-                s = s.replace('"', '\\"')
+            #避免重复转义
+            if '\\' in s:
+                # 检查是否已经是正确转义的格式
+                return s
             else:
-                s = s.replace("'", "\\'")
-            # 换行、标签之类的先留着别动
-            return s
+                # 对未转义的字符串进行基本转义
+                return s.replace('\\', '\\\\').replace(quote_char, '\\' + quote_char)
+        #     # 别转了会出错
+        #     s = s.replace('\\', '\\\\')
+        #     if quote == '"':
+        #         s = s.replace('"', '\\"')
+        #     else:
+        #         s = s.replace("'", "\\'")
+        #     # 换行、标签之类的先留着别动
+        #     return s
 
         def replace_first_string_literal(line, new_text):
             # 找到一行里第一对引号里的字，把它换掉。支持 "..."" 和 '...'
@@ -275,7 +282,7 @@ label import_dialogue:
                                 non_comment_lines.append(line)
                         
                         # 2) 加上新的提示注释
-                        # 算一下这条“翻译待更新”该加到第几次了
+                        # 算一下这条"翻译待更新"该加到第几次了
                         count_match = re.search(r'#翻译待更新(?: x(\d+))?', match[1])
                         count = 1
                         if count_match and count_match.group(1):
@@ -290,19 +297,21 @@ label import_dialogue:
                         # 重新拼一下块，缩进照旧
                         cleaned_block = '\n'.join(non_comment_lines)
                         
-                        # 拼接更新后的代码块，尽量别多出空行
+                        # 拼接更新后的代码块，去掉多余空行
                         updated_block_parts = [
-                            match[0].replace(old_id, new_id),
-                            new_comments
+                            match[0].replace(old_id, new_id).rstrip(),  # 去掉尾部空白
+                            new_comments.rstrip()  # 去掉尾部空白
                         ]
                         
-                        if voice_line_to_add:
-                            updated_block_parts.append(voice_line_to_add)
+                        if cleaned_block.strip():  # 只有当cleaned_block有内容时才添加
+                            updated_block_parts.append(cleaned_block.rstrip())
                         
-                        updated_block_parts.append(cleaned_block)
+                        # 用换行把各段合起来，避免多余空行
+                        updated_block = "\n".join(part for part in updated_block_parts if part.strip())
                         
-                        # 用换行把各段合起来
-                        updated_block = "\n".join(part for part in updated_block_parts if part)
+                        # 如果原块末尾有换行，保持相同的格式
+                        if original_block.endswith('\n'):
+                            updated_block += '\n'
                         
                         # 替换翻译块
                         content = content.replace(original_block, updated_block)
@@ -324,29 +333,29 @@ label import_dialogue:
             m = re.search(r'(\r\n|\n|\r)$', s)
             return m.group(1) if m else ''
         
-        def clear_screen_variables():
-            #怀疑可能是变量导致第二次运行时失败，清理下试试
-            if hasattr(store, 'selected_file'):
-                del store.selected_file
-            if hasattr(store, 'update_text'):
-                del store.update_text
-            if hasattr(store, 'insert_voice'):
-                del store.insert_voice
-            if hasattr(store, 'update_identifier'):
-                del store.update_identifier
-            if hasattr(store, 'update_translation'):
-                del store.update_translation
+        # def clear_screen_variables():
+        #     #怀疑可能是变量导致第二次运行时失败，清理下试试
+        #     if hasattr(store, 'selected_file'):
+        #         del store.selected_file
+        #     if hasattr(store, 'update_text'):
+        #         del store.update_text
+        #     if hasattr(store, 'insert_voice'):
+        #         del store.insert_voice
+        #     if hasattr(store, 'update_identifier'):
+        #         del store.update_identifier
+        #     if hasattr(store, 'update_translation'):
+        #         del store.update_translation
             
-            if hasattr(store, 'ops_by_file'):
-                del store.ops_by_file
-            if hasattr(store, 'modified_targets'):
-                del store.modified_targets
-            if hasattr(store, 'failed_ops'):
-                del store.failed_ops
-            if hasattr(store, 'tl_files'):
-                del store.tl_files
+        #     if hasattr(store, 'ops_by_file'):
+        #         del store.ops_by_file
+        #     if hasattr(store, 'modified_targets'):
+        #         del store.modified_targets
+        #     if hasattr(store, 'failed_ops'):
+        #         del store.failed_ops
+        #     if hasattr(store, 'tl_files'):
+        #         del store.tl_files
         
-            renpy.restart_interaction()
+        #     renpy.restart_interaction()
         
         ########################################
         #调用页面区
@@ -454,6 +463,8 @@ label import_dialogue:
                         new_dlg = (nrow.get("dialogue") or "")
                         if has_voice_col:
                             old_voice = (orow.get("voice"or "")).strip()
+                        else:
+                            old_voice = ""
                         if (old_char == new_char) and (old_dlg == new_dlg) and (opt_insert_voice== False  or old_voice == ""):
                             continue 
                     fn_rel, ln = new_id_to_pos[oid]
@@ -655,13 +666,13 @@ label import_dialogue:
                     #old_id_to_text[oid] = (ch, dlg, voice)
 
                 interface.processing(_("Updating TL blocks for identifier changes..."))
-                for oid, nid in updated_ids.items():
-                    if not oid or not nid or oid == nid:
+                for exoid, exnid in updated_ids.items():
+                    if not exoid or not exnid or exoid == exnid:
                         continue
-                    _ch, _dlg = old_id_to_text.get(oid, ("", ""))
+                    _ch, _dlg = old_id_to_text.get(exoid, ("", ""))
                     #_ch, _dlg,_voice = old_id_to_text.get(oid, ("", "",""))
                     # 即便没有对白，也执行头部改名与插入提示
-                    update_tl_block_for_id_change(oid, nid, _ch or "",_dlg or "")
+                    update_tl_block_for_id_change(exoid, exnid, _ch or "",_dlg or "")
                     #update_tl_block_for_id_change(oid, nid, _ch or "",_dlg or "", _voice or "")
 
 
@@ -706,7 +717,7 @@ label import_dialogue:
                 msg += f"... and {len(failed_ops) - 20} more.\n"
             interface.info(msg)
         else:
-            clear_screen_variables()
+            #clear_screen_variables()
             interface.info(_("Done."))
     
     jump front_page
