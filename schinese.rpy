@@ -2,10 +2,8 @@
 # TODO: Translation updated at 2025-08-29 21:57
 
 translate schinese strings:
-
-    # game/input_dialogue.rpy:246
-    old "Ren'Py is extracting dialogue...."
-    new "Ren'Py 正在提取文本……"
+    old "Import Dialogue"
+    new "批量更新对话"
 
     # game/input_dialogue.rpy:364
     old "No project selected."
