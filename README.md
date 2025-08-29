@@ -8,9 +8,13 @@
 ## 功能特点
 
 - **📝 更新剧情文本**：根据 `.tab` 表格里的 `Identifier`替换 `.rpy` 脚本里对应的对话内容。不用行号匹配。但注意不能增删行，且必须保证你用的 `.tab` 表格是最新的（导出表格后要是改了脚本文本，会导致修改的脚本文件中的Identifier变更，因此就会`.tab`文件对不上了
+- 
 - **🎵 插入语音标记**：自动添加 `voice "file.ogg"` 行，在表格里新建一列，表头写上 `"voice"`，下面填好文件名（不用加引号）。运行工具时勾选选项，就能批量在对话前插入语音代码。适合只有零星几句语音，或者大量复用同一语音的情况。如果你有完整多语言配音，**就没有必要使用这个了！**！官方自带的自动匹配更香XD
+- 
 - **🆔 更新标识符**：修改文本后，语句的 `Identifier` 会变。这个功能能把新的 `Identifier` 写回你的 `.tab` 表格里，方便你下轮继续编辑。
+- 
 - **🌍 更新翻译文件**：当 `Identifier` 变了，旧的翻译就会失效。这个功能会同步更新翻译文件里的 `Identifier`，并贴心地加一句 `#翻译待更新` 注释，帮你快速定位哪些翻译需要返工（顺便还会标记修改次数，跑了几遍就会x几，用来计算到底修了多少次（草
+- 
 - **🔤 多编码支持**：支持 UTF-8 和 GBK 编码的文件（tmd，一用excel编辑tab表格就会强制变成gbk编码表！
 
 ## 怎么用？
@@ -22,6 +26,7 @@
 2. 把 `input_dialogue.rpy` 放进 `你的项目/renpy/launcher/game/` 中。
 3. 把 `schinese.rpy` 放进 `你的项目/renpy/launcher/game/tl/schinese/` 中。
 
+
 ### 2. 添加入口
 打开 `你的项目/renpy/launcher/game/front_page.rpy`，找到类似下面的代码块：
 ```rpy
@@ -32,6 +37,7 @@ textbutton _("Force Recompile") action Jump("force_recompile")
 textbutton _("Import Dialogue") action Jump("import_dialogue")
 ```
 现在打开 Ren'Py 启动器，就能在列表中看到“**批量更新对话**”的入口了！
+
 
 ### 3. 准备 `.tab` 文件
 请使用 Ren'Py 自带的“**提取对话**”功能来获取 `.tab` 文件。
@@ -51,6 +57,7 @@ textbutton _("Import Dialogue") action Jump("import_dialogue")
 **可选列：**
 - `voice` – 语音文件名（例如 `voice_01`）
 
+
 ### 4. 运行工具
 1.  打开 Ren'Py 启动器。
 2.  选择你的项目。
@@ -58,6 +65,7 @@ textbutton _("Import Dialogue") action Jump("import_dialogue")
 4.  选择你的 `.tab` 文件并勾选需要的处理选项。
 5.  **备份备份备份！！！！！！！！！！**
 6.  点击 **处理文件**，祈祷吧！ 
+
 
 ## 选项说明书
 
@@ -68,10 +76,12 @@ textbutton _("Import Dialogue") action Jump("import_dialogue")
 | **更新对话标识符** | 如果更新文本后 Identifier 变了，把新 Identifier 写回你的 `.tab` 文件里。 |
 | **更新翻译字符串** | 如果 Identifier 变了，同步更新翻译文件里的 Identifier 并添加注释。 |
 
+
 ## 要求
 
 - Ren'Py 7.4.0 或更高版本
 - 一个已经通过“提取对话”功能处理过的 Ren'Py 项目
+
 
 ## ⚠️ 重要警告！
 
@@ -82,7 +92,7 @@ textbutton _("Import Dialogue") action Jump("import_dialogue")
 
 ---
 
-# Ren'Py Dialogue Importer Tool
+# Ren'Py Tab Importer Tool
 
 A lifesaver tool to pull you out of the despair of typo hell! It's designed for batch updating game scripts from `.tab` files, adding voice lines, and updating translation identifiers.
 
@@ -92,9 +102,13 @@ In short, this is your "I regret everything" button. It's most useful in that ni
 ## What Can It Do?
 
 - **📝 Update Story Text**: Precisely replaces dialogue text in `.rpy` scripts based on the `Identifier` in the `.tab` file. No line number matching needed! But note: You cannot add or delete lines, and you MUST use the latest `.tab` file (if you modify the script text after exporting the table, the Identifier won't match and it will fail for that line!).
+- 
 - **🎵 Insert Voice Tags**: Automatically adds `voice "file.ogg"` lines! Create a new column in your table named `"voice"`, fill in the filenames (without quotes). Check the option when running the tool to batch insert voice code before dialogues. Perfect for projects with just a few voice lines or heavy voice reuse. **Do NOT use this** if you have full multi-language voiceovers! The official automatic matching is better.
+- 
 - **🆔 Update Identifiers**: Modifying text changes the statement's `Identifier`. This feature writes the new `Identifier` back to your `.tab` file, making the next round of editing easier.
+- 
 - **🌍 Update Translation Files**: When the `Identifier` changes, old translations break. This feature synchronizes the new `Identifier` into the translation files and kindly adds a `# Translation needs update` comment, helping you quickly locate which translations need work (It also marks how many times it's been modified—an 'x' followed by the count—so you know exactly how much you've been messing around 😂).
+- 
 - **🔤 Multi-Encoding Support**: Handles files in both UTF-8 and GBK encodings (**Darn it, Excel always forces `.tab` files into GBK!**).
 
 ## How to Use?
