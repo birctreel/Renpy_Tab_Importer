@@ -4,7 +4,9 @@ label import_dialogue:
         import re
         import io
         import shutil
-
+        ########################################
+        #提前定义去
+        ########################################
         def read_text_file_guess_encoding(path):
             try:
                 with io.open(path, 'r', encoding='utf-8') as f:
@@ -35,7 +37,7 @@ label import_dialogue:
             return headers, rows, enc
 
         def save_tab_file(path, headers, rows, encoding='utf-8'):
-            # 保持原有列顺序输出
+            # 按原来的列顺序往外写
             out_lines = []
             out_lines.append('\t'.join(headers))
             for r in rows:
@@ -55,21 +57,18 @@ label import_dialogue:
                 return default
 
         def escape_renpy_string(s, quote='"'):
-            # 简单转义，避免破坏行
+            # 简单转义下，
             s = s.replace('\\', '\\\\')
             if quote == '"':
                 s = s.replace('"', '\\"')
             else:
                 s = s.replace("'", "\\'")
-            # 保留换行、标签等
+            # 换行、标签之类的先留着别动
             return s
 
         def replace_first_string_literal(line, new_text):
-            # 在一行中找到第一对引号里的内容，替换之。支持 "..." 或 '...'
-            # 返回 (新行, 使用的引号, 起始索引, 结束索引) 或 (None, None, None, None) 表示失败
-            # 忽略#之后的注释（若#在引号前则认为整行是注释）
-            # 简化处理，不考虑三引号
-            # 找到第一个引号前若存在 # 则认为注释，放弃
+            # 找到一行里第一对引号里的字，把它换掉。支持 "..."" 和 '...'
+            # 返回 (新行, 用到的引号, 起始位置, 结束位置)，找不到就全是 None
             qpos = len(line)
             qchar = None
             for i, ch in enumerate(line):
@@ -84,7 +83,7 @@ label import_dialogue:
             if qchar is None:
                 return None, None, None, None
 
-            # 寻找结束引号，处理转义
+            # 往后找配对的引号，顺便处理转义
             i = qpos + 1
             escaped = False
             while i < len(line):
@@ -94,7 +93,7 @@ label import_dialogue:
                 elif c == '\\':
                     escaped = True
                 elif c == qchar:
-                    # 找到结束
+                    # 找到收尾的引号了
                     start = qpos
                     end = i
                     new_content = escape_renpy_string(new_text, qchar)
@@ -102,14 +101,12 @@ label import_dialogue:
                     return new_line, qchar, start, end
                 i += 1
 
-            # 未找到结束引号
+            # 没等到收尾引号
             return None, None, None, None
 
         def try_update_character_token(line, desired_char):
-            # 将第一对引号之前的最后一个“令牌”替换成desired_char。
-            # desired_char为空时，尽量删除该令牌。
-            # 仅处理形如 "<indent><token><spaces>\"..." 的简单情况，复杂情况保留原样。
-            # 返回 (新行, 是否修改)
+            # 把第一对引号前面的最后一个“词”换成 desired_char
+            # 如果 desired_char 为空，就尽量把这个词删了
             m = re.match(r'^(\s*)(.*?)(["\'])', line)
             if not m:
                 return line, False
@@ -117,34 +114,29 @@ label import_dialogue:
             before = m.group(2)
             quote = m.group(3)
 
-            # 若before为空或纯空白，无需替换角色（旁白）
+            # 如果 before 是空的或全空白，当旁白用，不用换人
             if before.strip() == '':
                 if desired_char:
-                    # 需要加上角色令牌
+                    # 这时候要补上角色名
                     return f'{indent}{desired_char} {quote}' + line[m.end():], True
                 else:
                     return line, False
 
-            # 有内容，尝试把最后一个“非空白序列”视为角色名
-            # 例如： "e    "  -> 替换 e
+            # 有东西的话，就把最后一个非空白的当角色名
             tokens = re.split(r'(\s+)', before)
-            # tokens 结构: token, space, token, space, ...
-            # 找到最后一个非空白token的索引
             idx = None
             for i in range(len(tokens)-1, -1, -1):
                 if tokens[i].strip() != '':
                     idx = i
                     break
             if idx is None:
-                # 全是空白
                 if desired_char:
                     return f'{indent}{desired_char} {quote}' + line[m.end():], True
                 else:
                     return line, False
 
-            # 若desired_char为空，删除该token以及其左侧可能的一个空格
             if not desired_char:
-                # 去掉该token，且若其左邻是空白一并去掉
+                # 把左边是空白的话顺手删了
                 new_tokens = tokens[:]
                 new_tokens[idx] = ''
                 if idx-1 >= 0 and new_tokens[idx-1].strip() == '':
@@ -153,18 +145,18 @@ label import_dialogue:
                 return f'{indent}{new_before}{quote}' + line[m.end():], True
             else:
                 tokens[idx] = desired_char
-                # 若角色名后没有空格，则补一个空格
+                # 角色名后面没空格的话，补一个
                 if idx+1 >= len(tokens) or tokens[idx+1].strip() != '':
                     tokens.insert(idx+1, ' ')
                 new_before = ''.join(tokens)
                 return f'{indent}{new_before}{quote}' + line[m.end():], True
 
         def insert_or_replace_voice(lines, idx, old_id,voice_value):
-            # 在idx所指向的台词行之前，插入或替换 voice "xxx"
-            # 返回新lines，返回插入/替换后的台词行行号（可能变化）
+            # 在第 idx 行台词前面插入或替换一行 voice "xxx"
+            # 返回新的 lines，还有台词行的新位置（大概率变了
             if idx < 0 or idx >= len(lines):
                 return lines, idx
-            # 获取缩进
+            # 缩进
             m = re.match(r'^(\s*)', lines[idx])
             indent = m.group(1) if m else ''
             if voice_value != None and voice_value != "":
@@ -173,10 +165,10 @@ label import_dialogue:
                     voice_line = f'{indent}{voice_value.rstrip()}\n'
                 else:
                     voice_line = f'{indent}voice "{voice_value}"\n'
-                # 若上一行已有voice则替换，否则插入
+                # 如果上一行已经有 voice，就直接替换；没有就插一行
 
 
-                # 更新翻译文本值
+                # 顺带把翻译文件里的 voice 也更新一下
                 pattern = re.compile(r'^(translate\s+\w+\s+' + re.escape(old_id) + r':)(.*?)(?=^translate|\Z)', re.MULTILINE | re.DOTALL)
                 
                 for file_path in tl_files:
@@ -184,44 +176,39 @@ label import_dialogue:
                         with open(file_path, 'r', encoding='utf-8') as f:
                             content = f.read()
                         
-                        # 查找所有匹配的代码块
                         matches = pattern.findall(content)
                         
                         if not matches:
                             continue
                             
-                        # 对每个匹配的代码块进行处理
+                        # 每个块都处理一遍
                         for match in matches:
                             original_block = match[0] + match[1]
                             
-                            # 检查是否已有voice行
+                            # 检查voice
                             voice_pattern = re.compile(r'^\s*voice\s+".*?"', re.MULTILINE)
                             has_voice = voice_pattern.search(match[1])
                             
                             if has_voice:
-                                # 替换现有的voice值
+                                # 有的话就把里面的值换掉
                                 updated_content = voice_pattern.sub(f'    voice "{voice_value}"', match[1])
                             else:
-                                # 添加新的voice行
-                                # 找到第一个非注释行和非空行的位置
+                                # 没有就补一行 voice
                                 lines = match[1].split('\n')
                                 insert_pos = 0
                                 for i, line in enumerate(lines):
                                     if line.strip() and not line.strip().startswith('#'):
                                         insert_pos = i
                                         break
-                                
-                                # 在第一个非注释行前插入voice行
                                 lines.insert(insert_pos, f'    voice "{voice_value}"')
                                 updated_content = '\n'.join(lines)
                             
-                            # 构建更新后的代码块
+                            # 拼好块
                             updated_block = match[0] + updated_content
                             
-                            # 替换原始内容中的代码块
+                            # 覆盖块
                             content = content.replace(original_block, updated_block)
                         
-                        # 写回文件
                         with open(file_path, 'w', encoding='utf-8') as f:
                             f.write(content)
                             
@@ -236,15 +223,13 @@ label import_dialogue:
                     return lines, idx
                 else:
                     lines.insert(idx, voice_line)
-                    return lines, idx + 1  # 台词行下移一行
+                    return lines, idx + 1  # 台词行被顶下去一行
 
         def run_extract_to(base_dir, target_copy_name):
-            # 运行一次extract，并把 base_dir/dialogue.tab 拷贝为 base_dir/target_copy_name
             language = persistent.extract_language
             args = ["dialogue", language]
-            if getattr(persistent, "dialogue_format", None) == "txt":
-                # 强制使用tab，忽略txt
-                pass
+            #if getattr(persistent, "dialogue_format", None) == "txt":
+            #    pass
             if getattr(persistent, "dialogue_strings", False):
                 args.append("--strings")
             if getattr(persistent, "dialogue_notags", False):
@@ -256,18 +241,17 @@ label import_dialogue:
             project.current.launch(args, wait=True)
             project.current.update_dump(force=True)
 
-            # 复制dialogue.tab为target_copy_name
+            # 把 dialogue.tab 复制成 target_copy_name
             src = os.path.join(base_dir, "dialogue.tab")
             dst = os.path.join(base_dir, target_copy_name)
             if not os.path.exists(src):
-                # 有些版本可能输出到其他名字，这里简单报错
                 raise Exception("dialogue.tab not found after extract.")
             shutil.copyfile(src, dst)
             return dst
 
 
         def update_tl_block_for_id_change(old_id, new_id, new_character, new_dialogue):
-            # 正则表达式模式，用于匹配translate代码块
+            # 更新翻译（尤其是identifier
             pattern = re.compile(r'^(translate\s+\w+\s+' + re.escape(old_id) + r':)(.*?)(?=^translate|\Z)', re.MULTILINE | re.DOTALL)
 
             for file_path in tl_files:
@@ -275,26 +259,23 @@ label import_dialogue:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
                     
-                    # 查找所有匹配的代码块
                     matches = pattern.findall(content)
                     
                     if not matches:
                         continue
                             
-                    # 对每个匹配的代码块进行处理
                     for match in matches:
                         original_block = match[0] + match[1]
                         
-                        # 1. 删除所有注释行
+                        # 删除无用注释行
                         lines = match[1].split('\n')
                         non_comment_lines = []
                         for line in lines:
-                            # 保留非注释行（行首为#的整行注释去除）
                             if not line.strip().startswith('#'):
                                 non_comment_lines.append(line)
                         
-                        # 2. 添加新的注释
-                        # 计算当前翻译待更新计数
+                        # 2) 加上新的提示注释
+                        # 算一下这条“翻译待更新”该加到第几次了
                         count_match = re.search(r'#翻译待更新(?: x(\d+))?', match[1])
                         count = 1
                         if count_match and count_match.group(1):
@@ -303,13 +284,13 @@ label import_dialogue:
                             new_story = new_character + ":" + new_dialogue
                         else:
                             new_story = new_dialogue
-                        # 构建新的注释
+                        # 拼新的注释内容
                         new_comments = "    #翻译待更新 x{}\n    #{}".format(count, new_story.replace('\n', '\n    # '))
                         
-                        # 重新构建代码块，保留缩进
+                        # 重新拼一下块，缩进照旧
                         cleaned_block = '\n'.join(non_comment_lines)
                         
-                        # 构建更新后的代码块 - 改进拼接逻辑，避免多余空行
+                        # 拼接更新后的代码块，尽量别多出空行
                         updated_block_parts = [
                             match[0].replace(old_id, new_id),
                             new_comments
@@ -320,13 +301,12 @@ label import_dialogue:
                         
                         updated_block_parts.append(cleaned_block)
                         
-                        # 使用换行符连接所有部分，但过滤掉空字符串
+                        # 用换行把各段合起来
                         updated_block = "\n".join(part for part in updated_block_parts if part)
                         
-                        # 替换原始内容中的代码块
+                        # 替换翻译块
                         content = content.replace(original_block, updated_block)
                     
-                    # 写回文件
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(content)
                             
@@ -335,20 +315,17 @@ label import_dialogue:
                 except Exception as e:
                     print(f"处理文件 {file_path} 时出错: {str(e)}")
 
-        # 使用示例
-        # tl_files = ["file1.rpy", "file2.rpy"]  # 需要替换为实际的文件列表
-        # update_translation_voice("start_8162b3b9", "test5", tl_files)
-        #辅助：是否包含中文
+
         def contains_cjk(s):
             return True if re.search(r'[\u4E00-\u9FFF]', s or '') else False
 
-        #辅助：获取行尾换行
+        # 小工具：拿到行尾的换行符
         def line_ending(s):
             m = re.search(r'(\r\n|\n|\r)$', s)
             return m.group(1) if m else ''
         
         def clear_screen_variables():
-            # 清空文件选择屏幕的变量
+            #怀疑可能是变量导致第二次运行时失败，清理下试试
             if hasattr(store, 'selected_file'):
                 del store.selected_file
             if hasattr(store, 'update_text'):
@@ -360,7 +337,6 @@ label import_dialogue:
             if hasattr(store, 'update_translation'):
                 del store.update_translation
             
-            # 清空其他可能的临时变量
             if hasattr(store, 'ops_by_file'):
                 del store.ops_by_file
             if hasattr(store, 'modified_targets'):
@@ -370,19 +346,20 @@ label import_dialogue:
             if hasattr(store, 'tl_files'):
                 del store.tl_files
         
-            # 强制Ren'Py重新初始化屏幕变量
             renpy.restart_interaction()
         
+        ########################################
+        #调用页面区
+        ########################################
         # 校验当前项目
         if project.current is None:
             interface.error(_("No project selected."), _("Please select a project first."))
             renpy.jump("front_page")
 
-        # 通过文件选择屏幕获取：旧tab路径 + 选项
-        # 返回 dict: { file: <path or None>, update_text: bool, insert_voice: bool, update_identifier: bool, update_translation: bool }
         ret = renpy.invoke_in_new_context(renpy.call_screen, "_file_picker", _("Select dialogue tab file "))
         if not ret or not ret.get("file"):
             renpy.jump("front_page")
+
 
         tab_file = ret["file"]
         opt_update_text = bool(ret.get("update_text"))
@@ -392,7 +369,28 @@ label import_dialogue:
 
         base_dir = project.current.path
         game_dir = os.path.join(base_dir, "game")
-        tl_language = persistent.extract_language or "None"
+        #tl_language = persistent.extract_language or "None"
+
+        
+        ########################################
+        #处理翻译文件（仅在tl文件夹里面寻找）
+        ########################################
+        # 为"更新翻译"准备tl文件列表
+        tl_base_dir = os.path.join(game_dir, "tl")
+        tl_files = []
+        if opt_update_translation and os.path.isdir(tl_base_dir):
+            for lang_folder in os.listdir(tl_base_dir):
+                lang_dir = os.path.join(tl_base_dir, lang_folder)
+                if os.path.isdir(lang_dir):
+                    for root, dirs, files in os.walk(lang_dir):
+                        for f in files:
+                            if f.lower().endswith(".rpy"):
+                                tl_files.append(os.path.join(root, f))
+
+
+        ########################################
+        #开始处）
+        ########################################
 
         # 读旧tab
         try:
@@ -424,8 +422,7 @@ label import_dialogue:
             renpy.jump("front_page")
         new_by_id = { (r.get("identifier") or ""): r for r in new_rows }
 
-        # 建立映射
-        # old_id -> old_row
+        # 建立映射old_id -> old_row
         old_by_id = {}
         for r in old_rows:
             old_by_id[r["identifier"]] = r
@@ -476,27 +473,17 @@ label import_dialogue:
                         op["translation"] = orow.get("translation", "")
                     ops_by_file.setdefault(abs_path, []).append(op)
 
+        ########################################
+        #修改剧情文本
+        ########################################
 
-        # 按文件修改
+
         modified_targets = []  # 记录已修改的 (filename_rel, original_line, final_line_after_ops)
         failed_ops = []
 
         if opt_update_text or opt_insert_voice or opt_update_translation:
             interface.processing(_("Applying updates to scripts..."))
 
-        # 为"更新翻译"准备tl文件列表
-        tl_base_dir = os.path.join(game_dir, "tl")
-        tl_files = []
-        if opt_update_translation and os.path.isdir(tl_base_dir):
-            # 遍历tl目录下的所有语言文件夹
-            for lang_folder in os.listdir(tl_base_dir):
-                lang_dir = os.path.join(tl_base_dir, lang_folder)
-                if os.path.isdir(lang_dir):
-                    # 遍历每个语言文件夹中的所有rpy文件
-                    for root, dirs, files in os.walk(lang_dir):
-                        for f in files:
-                            if f.lower().endswith(".rpy"):
-                                tl_files.append(os.path.join(root, f))
 
 
         # 逐文件执行（注意插入会影响后续行号，故按行号降序处理）
@@ -585,7 +572,11 @@ label import_dialogue:
                 failed_ops.extend([(abs_path, -1, "Write error: " + str(e))])
 
 
-        # 如需更新Identifier
+        
+        ########################################
+        #更新Identifier
+        ########################################
+
         if opt_update_identifier:
             interface.processing(_("Re-extracting dialogue to update identifiers..."))
             try:
@@ -609,7 +600,7 @@ label import_dialogue:
                     continue
                 ch_pos_to_id[(fn, ln)] = r.get("identifier", "")
 
-            # 构造 newest 的 (fn, ln) -> old_id 映射（只对我们处理过的目标）
+            # 构造 newest 的 (fn, ln) -> old_id 映射（只对处理过的目标
             newest_pos_to_oldid = {}
             for fn_rel, ln0, _ln1 in modified_targets:
                 # 找出该位置在newest中的old_id（第二步拿到的就是newest的位置信息）
@@ -617,8 +608,7 @@ label import_dialogue:
                 if oid:
                     newest_pos_to_oldid[(fn_rel, ln0)] = oid
 
-            # 为每个目标位置找到 changed 中的新identifier
-            # 若插入语音导致行号+1，则先尝试原行号，再尝试+1；再不行尝试邻近范围
+            # 为每个目标位置找到 changed 中的新identifier，如果行号+1，则先尝试原行号，再尝试+1；再不行尝试邻近范围
             updated_ids = {}  # old_id -> new_id
             for (fn_rel, ln0), oid in newest_pos_to_oldid.items():
                 candidates = []
@@ -720,9 +710,11 @@ label import_dialogue:
             interface.info(_("Done."))
     
     jump front_page
-# 更新后的文件选择屏幕
 
 
+########################################
+#选择tab文件页
+########################################
 label choose_tab_directory:
     python hide:
         interface.interaction(
@@ -740,6 +732,11 @@ label choose_tab_directory:
             interface.info(message)
 
     return
+
+########################################
+#参考Preference页的完美UI！！（草
+########################################
+
 screen _file_picker(title, pattern="*.tab", multiple=False):
     modal True
     
