@@ -318,10 +318,10 @@ label import_dialogue:
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(content)
                             
-                    print(f"成功更新文件: {file_path}")
+                    print(f"File Updated Succeed: {file_path}")
                     
                 except Exception as e:
-                    print(f"处理文件 {file_path} 时出错: {str(e)}")
+                    print(f"Failed to deal file {file_path} : {str(e)}")
 
 
         def contains_cjk(s):
